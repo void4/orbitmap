@@ -48,8 +48,8 @@ from PIL import Image, ImageDraw
 WIDTH, HEIGHT = 900, 600
 WIDTHD2, HEIGHTD2 = WIDTH/2., HEIGHT/2.
 
-SCALE = 0.05
-MX = MY = 75
+SCALE = 0.01
+MX = MY = 100
 ix = 150
 iy = 300
 ivx = 0
@@ -84,6 +84,8 @@ IDX = 200
 IVX = 15
 IMM = 500
 
+imgarr = None
+colarr = None
 
 class State:
     """Class representing position and velocity."""
@@ -198,7 +200,7 @@ def planetsTouch(p1, p2):
     return dr<=(p1._r + p2._r)
 
 def initialize():
-    global img, sun, sun2, planets, PLANETS, imgarr
+    global img, sun, sun2, planets, PLANETS, imgarr, colarr
     if len(sys.argv) == 2:
         PLANETS = int(sys.argv[1])
 
@@ -212,8 +214,9 @@ def initialize():
             planets.append(Planet(state))
 
     imgarr = np.array([[0 for x in range(W)] for y in range(H)])
+    colarr = [[None for x in range(W)] for y in range(H)]
 
-    img = Image.new("RGB", (W,H), color=(255,0,0))
+    img = Image.new("RGB", (W,H), color=(0,0,0))
 
     sun = Planet(State(WIDTHD2, HEIGHTD2-IDX, -IVX, 0, 0, 0))
     sun._m *= IMM
@@ -245,7 +248,7 @@ def normalize(arr):
     return ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype('uint8')
 
 def main():
-    global img
+    global img, colarr
     pygame.init()
     win=pygame.display.set_mode((WIDTH, HEIGHT))
 
@@ -266,7 +269,7 @@ def main():
     zoom = 1.0
     # t and dt are unused in this simulation, but are in general,
     # parameters of engine (acceleration may depend on them)
-    t, dt = 0., 1.
+    t, dt = 0., 1
 
     bClearScreen = True
     pygame.display.set_caption('Gravity simulation (SPACE: show orbits, '
@@ -318,6 +321,7 @@ def main():
                         p1, p2 = p2, p1  # p1 is the biggest one (mass-wise)
                     p2._merged = True
                     imgarr[p2._st._iy][p2._st._ix] = tick
+                    colarr[p2._st._iy][p2._st._ix] = (255,0,0) if planets[-1] in [p1, p2]  else (0,0,255)
                     #img.putpixel((p2._st._ix, p2._st._iy), (0,255,0))
                     if p1 is sun or p1 is sun2:
                         continue  # No-one can move the sun :-)
@@ -331,7 +335,10 @@ def main():
 
         for y in range(H):
             for x in range(W):
-                img.putpixel((x,y), (0,normalized[y][x],0))
+                col = colarr[y][x]
+                if col:
+                    red, _, blue = col
+                    img.putpixel((x,y), (red,normalized[y][x],blue))
 
         # update zoom factor (numeric keypad +/- keys)
         if keysPressed[pygame.K_KP_PLUS]:
@@ -357,6 +364,13 @@ def main():
 
         if keysPressed[pygame.K_r]:
             initialize()
+
+        if keysPressed[pygame.K_UP]:
+            dt *= 2
+        elif keysPressed[pygame.K_DOWN]:
+            dt /= 2
+
+        print(dt)
 
 if __name__ == "__main__":
     main()
