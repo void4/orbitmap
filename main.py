@@ -55,6 +55,8 @@ iy = 300
 ivx = 0
 ivy = 2
 
+STATICSUN = False
+
 W = 2*MX+1
 H = 2*MY+1
 
@@ -208,17 +210,13 @@ def initialize():
 
     img = Image.new("RGB", (W,H), color=(255,0,0))
 
-    sun = Planet()
-    sun._st._x, sun._st._y = WIDTHD2, HEIGHTD2
-    sun._st._vx = sun._st._vy = 0.
-    sun._m *= 1000
+    sun = Planet(State(WIDTHD2, HEIGHTD2, -4, 0, 0, 0))
+    sun._m *= 100
     sun.setRadiusFromMass()
     planets.append(sun)
 
-    sun2 = Planet()
-    sun2._st._x, sun._st._y = WIDTHD2+200, HEIGHTD2+200
-    sun2._st._vx = sun._st._vy = 0.
-    sun2._m *= 1000
+    sun2 = Planet(State(WIDTHD2, HEIGHTD2+200, 4, 0, 0, 0))
+    sun2._m *= 100
     sun2.setRadiusFromMass()
     planets.append(sun2)
 
@@ -292,7 +290,7 @@ def main():
         # Update all planets' positions and speeds (should normally double
         # buffer the list of planet data, but turns out this is good enough :-)
         for p in planets:
-            if p._merged or p is sun or p is sun2:
+            if p._merged or (STATICSUN and (p is sun or p is sun2)):
                 continue
             # Calculate the contributions of all the others to its acceleration
             # (via the gravity force) and update its position and velocity
