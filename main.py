@@ -49,7 +49,7 @@ WIDTH, HEIGHT = 900, 600
 WIDTHD2, HEIGHTD2 = WIDTH/2., HEIGHT/2.
 
 SCALE = 0.05
-MX = MY = 50
+MX = MY = 75
 ix = 150
 iy = 300
 ivx = 0
@@ -208,7 +208,7 @@ def initialize():
 
     for x in range(-MX, MX+1):
         for y in range(-MY, MY+1):
-            state = State(ix, iy, x*SCALE, y*SCALE, x+MX, y+MY)
+            state = State(WIDTHD2, HEIGHTD2, x*SCALE, y*SCALE, x+MX, y+MY)
             planets.append(Planet(state))
 
     imgarr = np.array([[0 for x in range(W)] for y in range(H)])
