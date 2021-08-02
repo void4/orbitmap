@@ -237,6 +237,10 @@ def pilImageToSurface(pilImage):
     return pygame.image.fromstring(
         pilImage.tobytes(), pilImage.size, pilImage.mode).convert()
 
+def lognormalize(arr):
+    arr = np.array([[math.log(1+arr[y][x]) for x in range(W)] for y in range(H)])
+    return normalize(arr)
+
 def normalize(arr):
     return ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype('uint8')
 
@@ -323,7 +327,7 @@ def main():
                     #p1.setRadiusFromMass()  # new mass --> new radius
                     #p1._st._vx, p1._st._vy = newvx, newvy
 
-        normalized = normalize(imgarr)
+        normalized = lognormalize(imgarr)
 
         for y in range(H):
             for x in range(W):
