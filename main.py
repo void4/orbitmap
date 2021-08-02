@@ -48,7 +48,7 @@ from PIL import Image, ImageDraw
 WIDTH, HEIGHT = 900, 600
 WIDTHD2, HEIGHTD2 = WIDTH/2., HEIGHT/2.
 
-SCALE = 0.1
+SCALE = 0.05
 MX = MY = 50
 ix = 150
 iy = 300
@@ -79,6 +79,10 @@ sun = None
 sun2 = None
 
 img = None
+
+IDX = 200
+IVX = 15
+IMM = 500
 
 
 class State:
@@ -139,10 +143,11 @@ class Planet:
             dy = p._st._y - state._y
             dsq = dx*dx + dy*dy  # distance squared
             dr = math.sqrt(dsq)  # distance
-            force = GRAVITYSTRENGTH*self._m*p._m/dsq if dsq>1e-10 else 0.
-            # Accumulate acceleration...
-            ax += force*dx/dr
-            ay += force*dy/dr
+            if dr != 0:
+                force = GRAVITYSTRENGTH*self._m*p._m/dsq if dsq>1e-10 else 0.
+                # Accumulate acceleration...
+                ax += force*dx/dr
+                ay += force*dy/dr
         return (ax, ay)
 
     def initialDerivative(self, state, t):
@@ -210,13 +215,13 @@ def initialize():
 
     img = Image.new("RGB", (W,H), color=(255,0,0))
 
-    sun = Planet(State(WIDTHD2, HEIGHTD2, -4, 0, 0, 0))
-    sun._m *= 100
+    sun = Planet(State(WIDTHD2, HEIGHTD2-IDX, -IVX, 0, 0, 0))
+    sun._m *= IMM
     sun.setRadiusFromMass()
     planets.append(sun)
 
-    sun2 = Planet(State(WIDTHD2, HEIGHTD2+200, 4, 0, 0, 0))
-    sun2._m *= 100
+    sun2 = Planet(State(WIDTHD2, HEIGHTD2+IDX, IVX, 0, 0, 0))
+    sun2._m *= IMM*0.5
     sun2.setRadiusFromMass()
     planets.append(sun2)
 
@@ -277,8 +282,8 @@ def main():
             imgsurf = pilImageToSurface(img)
             win.blit(imgsurf, imgsurf.get_rect(center=(ix,iy)))
 
-        for p in planets:
-            if not p._merged:  # for planets that have not been merged, draw a
+        for pindex, p in enumerate(planets):
+            if not p._merged:#XXX and pindex % 100 == 0:  # for planets that have not been merged, draw a
                 # circle based on their radius, but take zoom factor into account
                 pygame.draw.circle(win, (255, 255, 255),
                     (int(WIDTHD2+zoom*WIDTHD2*(p._st._x-WIDTHD2)/WIDTHD2),
