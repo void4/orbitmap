@@ -39,10 +39,26 @@ import math
 import pygame
 import random
 from collections import defaultdict
+import numpy as np
+from time import time
+
+from PIL import Image, ImageDraw
 
 # The window size
 WIDTH, HEIGHT = 900, 600
 WIDTHD2, HEIGHTD2 = WIDTH/2., HEIGHT/2.
+
+SCALE = 0.1
+MX = MY = 50
+ix = 150
+iy = 300
+ivx = 0
+ivy = 2
+
+W = 2*MX+1
+H = 2*MY+1
+
+RESIZE = 4
 
 # The number of simulated planets
 PLANETS = 30
@@ -58,12 +74,16 @@ GRAVITYSTRENGTH = 1.e4
 planets = []
 
 sun = None
+sun2 = None
+
+img = None
 
 
 class State:
     """Class representing position and velocity."""
-    def __init__(self, x, y, vx, vy):
+    def __init__(self, x, y, vx, vy, px, py):
         self._x, self._y, self._vx, self._vy = x, y, vx, vy
+        self._ix, self._iy = px, py
 
     def __repr__(self):
         return 'x:{x} y:{y} vx:{vx} vy:{vy}'.format(
@@ -87,14 +107,16 @@ class Planet:
     def __init__(self, state=None):
         if PLANETS == 1:
             # A nice example of a planet orbiting around our sun :-)
-            self._st = State(150, 300, 0, 2)
+            self._st = State(150, 300, 0, 2, 0, 0)
         elif state is None:
             # otherwise pick a random position and velocity
             self._st = State(
                float(random.randint(0, WIDTH)),
                float(random.randint(0, HEIGHT)),
                float(random.randint(0, 300)/100.)-1.5,
-               float(random.randint(0, 300)/100.)-1.5)
+               float(random.randint(0, 300)/100.)-1.5,
+               0,0
+               )
         else:
             self._st = state
         self._r = 1.5
@@ -108,7 +130,7 @@ class Planet:
         """Calculate acceleration caused by other planets on this one."""
         ax = 0.0
         ay = 0.0
-        for p in planets[-1:]:
+        for p in planets[-2:]:
             if p is self or p._merged:
                 continue  # ignore ourselves and merged planets
             dx = p._st._x - state._x
@@ -128,7 +150,7 @@ class Planet:
 
     def nextDerivative(self, initialState, derivative, t, dt):
         """Part of Runge-Kutta method."""
-        state = State(0., 0., 0., 0.)
+        state = State(0., 0., 0., 0., None, None)
         state._x = initialState._x + derivative._dx*dt
         state._y = initialState._y + derivative._dy*dt
         state._vx = initialState._vx + derivative._dvx*dt
@@ -169,25 +191,22 @@ def planetsTouch(p1, p2):
     return dr<=(p1._r + p2._r)
 
 def initialize():
-    global sun, planets, PLANETS
+    global img, sun, sun2, planets, PLANETS, imgarr
     if len(sys.argv) == 2:
         PLANETS = int(sys.argv[1])
 
     # And God said: Let there be lights in the firmament of the heavens...
     planets = []
     #for i in range(0, PLANETS):
-    SCALE = 2
-    MX = MY = 10
-    ix = 150
-    iy = 300
-    ivx = 0
-    ivy = 2
+
     for x in range(-MX, MX+1):
         for y in range(-MY, MY+1):
-            state = State(ix, iy, x*SCALE, y*SCALE)
+            state = State(ix, iy, x*SCALE, y*SCALE, x+MX, y+MY)
             planets.append(Planet(state))
 
+    imgarr = np.array([[0 for x in range(W)] for y in range(H)])
 
+    img = Image.new("RGB", (W,H), color=(255,0,0))
 
     sun = Planet()
     sun._st._x, sun._st._y = WIDTHD2, HEIGHTD2
@@ -195,13 +214,31 @@ def initialize():
     sun._m *= 1000
     sun.setRadiusFromMass()
     planets.append(sun)
+
+    sun2 = Planet()
+    sun2._st._x, sun._st._y = WIDTHD2+200, HEIGHTD2+200
+    sun2._st._vx = sun._st._vy = 0.
+    sun2._m *= 1000
+    sun2.setRadiusFromMass()
+    planets.append(sun2)
+
+    """
     for p in planets:
         if p is sun:
             continue
         if planetsTouch(p, sun):
             p._merged = True  # ignore planets inside the sun
+    """
+
+def pilImageToSurface(pilImage):
+    return pygame.image.fromstring(
+        pilImage.tobytes(), pilImage.size, pilImage.mode).convert()
+
+def normalize(arr):
+    return ((arr - arr.min()) * (1/(arr.max() - arr.min()) * 255)).astype('uint8')
 
 def main():
+    global img
     pygame.init()
     win=pygame.display.set_mode((WIDTH, HEIGHT))
 
@@ -226,13 +263,22 @@ def main():
 
     bClearScreen = True
     pygame.display.set_caption('Gravity simulation (SPACE: show orbits, '
-                               'keypad +/- : zoom in/out)')
+                       'keypad +/- : zoom in/out)')
+
+    tick = 0
+
     while True:
+        tick += 1
         t += dt
         pygame.display.flip()
         if bClearScreen:  # Show orbits or not?
             win.fill((0, 0, 0))
-        win.lock()
+        #win.lock()
+
+        if img is not None:
+            imgsurf = pilImageToSurface(img)
+            win.blit(imgsurf, imgsurf.get_rect(center=(ix,iy)))
+
         for p in planets:
             if not p._merged:  # for planets that have not been merged, draw a
                 # circle based on their radius, but take zoom factor into account
@@ -246,7 +292,7 @@ def main():
         # Update all planets' positions and speeds (should normally double
         # buffer the list of planet data, but turns out this is good enough :-)
         for p in planets:
-            if p._merged or p is sun:
+            if p._merged or p is sun or p is sun2:
                 continue
             # Calculate the contributions of all the others to its acceleration
             # (via the gravity force) and update its position and velocity
@@ -257,20 +303,28 @@ def main():
         for p1 in planets:
             if p1._merged:
                 continue
-            for p2 in planets:
+            for p2 in planets[-2:]:
                 if p1 is p2 or p2._merged:
                     continue
                 if planetsTouch(p1, p2):
                     if p1._m < p2._m:
                         p1, p2 = p2, p1  # p1 is the biggest one (mass-wise)
                     p2._merged = True
-                    if p1 is sun:
+                    imgarr[p2._st._iy][p2._st._ix] = tick
+                    #img.putpixel((p2._st._ix, p2._st._iy), (0,255,0))
+                    if p1 is sun or p1 is sun2:
                         continue  # No-one can move the sun :-)
-                    newvx = (p1._st._vx*p1._m+p2._st._vx*p2._m)/(p1._m+p2._m)
-                    newvy = (p1._st._vy*p1._m+p2._st._vy*p2._m)/(p1._m+p2._m)
-                    p1._m += p2._m  # maintain the mass (just add them)
-                    p1.setRadiusFromMass()  # new mass --> new radius
-                    p1._st._vx, p1._st._vy = newvx, newvy
+                    #newvx = (p1._st._vx*p1._m+p2._st._vx*p2._m)/(p1._m+p2._m)
+                    #newvy = (p1._st._vy*p1._m+p2._st._vy*p2._m)/(p1._m+p2._m)
+                    #p1._m += p2._m  # maintain the mass (just add them)
+                    #p1.setRadiusFromMass()  # new mass --> new radius
+                    #p1._st._vx, p1._st._vy = newvx, newvy
+
+        normalized = normalize(imgarr)
+
+        for y in range(H):
+            for x in range(W):
+                img.putpixel((x,y), (0,normalized[y][x],0))
 
         # update zoom factor (numeric keypad +/- keys)
         if keysPressed[pygame.K_KP_PLUS]:
@@ -289,6 +343,9 @@ def main():
                 '%s orbits, keypad +/- : zoom in/out)' % verb)
 
         if keysPressed[pygame.K_q]:
+            img.save(f"{int(time())}.png")
+            #img = img.resize((W*RESIZE, H*RESIZE))
+            #img.show()
             pygame.quit()
 
         if keysPressed[pygame.K_r]:
